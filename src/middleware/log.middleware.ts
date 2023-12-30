@@ -1,10 +1,12 @@
-import type { NextFunction, Request, Response } from 'express';
+import type {NextFunction, Request, Response} from 'express';
 import chalk from 'chalk';
 
 export type TLogType = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 
 export enum ELogCategory {
   SETUP = 'setup',
+  AUTHENTIFICATION = 'authentification',
+  DOWNLOAD = 'download',
 }
 
 export function logMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -12,11 +14,7 @@ export function logMiddleware(req: Request, res: Response, next: NextFunction) {
   res.on('finish', async () => {
     const statusCode = res.statusCode;
     const type: TLogType =
-      statusCode >= 200 && statusCode < 400
-        ? 'LOG'
-        : statusCode >= 400 && statusCode < 500
-        ? 'WARN'
-        : 'ERROR';
+      statusCode >= 200 && statusCode < 400 ? 'LOG' : statusCode >= 400 && statusCode < 500 ? 'WARN' : 'ERROR';
     const category = res.statusCode.toString();
     const message = {
       method: req.method,
@@ -24,7 +22,7 @@ export function logMiddleware(req: Request, res: Response, next: NextFunction) {
       location: req.originalUrl,
       body: req.body,
       query: req.query,
-      header: { authorization: req.headers.authorization },
+      header: {authorization: req.headers.authorization},
     };
 
     log(type, category, message);
@@ -32,11 +30,7 @@ export function logMiddleware(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-export function log(
-  type: TLogType,
-  category: ELogCategory | string | number,
-  message: string | object
-) {
+export function log(type: TLogType, category: ELogCategory | string | number, message: string | object) {
   const msg = typeof message == 'string' ? message : JSON.stringify(message);
   const time = new Date().toISOString();
   const section = `(${category})`;

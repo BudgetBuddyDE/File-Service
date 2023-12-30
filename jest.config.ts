@@ -1,16 +1,17 @@
-import { type Config } from 'jest';
+import {type Config} from 'jest';
 
 const JestConfig: Config = {
-  setupFilesAfterEnv: ['<rootDir>/src/config.ts'],
+  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setupTests.ts'],
   transform: {
     '^.+\\.ts?$': 'ts-jest',
   },
   testEnvironment: 'node',
   testRegex: '\\.(test|spec)\\.(ts)?$',
   moduleFileExtensions: ['ts', 'js'],
-  silent: true,
+  // silent: true,
   globals: {
     'process.env': {
+      // UPLOAD_DIR: 'testfiles',
       // NODE_ENV: 'test',
     },
   },
