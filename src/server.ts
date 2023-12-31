@@ -23,7 +23,6 @@ if (MISSING_ENVIRONMENT_VARIABLES.length >= 1) {
 }
 
 import {name, version} from '../package.json';
-import {z} from 'zod';
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
@@ -36,14 +35,6 @@ import {query} from 'express-validator';
 import {ApiResponse, HTTPStatusCode} from '@budgetbuddyde/types';
 import {FileService, type TFile} from './services';
 import {checkAuthorizationHeader} from './middleware/checkAuthorization.middleware';
-import {request} from 'http';
-
-export const app = express();
-
-app.use(cors(config.cors));
-app.use(logMiddleware);
-app.use(checkAuthorizationHeader);
-app.use(bodyParser.json());
 
 // const uploadDir = process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads');
 const fileService = new FileService(
@@ -52,6 +43,15 @@ const fileService = new FileService(
 fs.mkdir(fileService.uploadDirectory, {recursive: true}, (err, path) => {
   if (err) log('ERROR', ELogCategory.SETUP, err);
 });
+
+export const app = express();
+
+app.use(cors(config.cors));
+app.use(logMiddleware);
+app.use(bodyParser.json());
+app.use(checkAuthorizationHeader);
+
+app.use('/static', express.static(fileService.uploadDirectory));
 
 // TODO: EXPOSE FILES USING A SYMBOLIC LINK USING A PUBLIC DIRECTORY
 

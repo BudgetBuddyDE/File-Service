@@ -13,12 +13,12 @@ afterAll(done => {
   });
 });
 
-const MOCK_ROLE: Record<string, Pick<TRole, 'name'>> = {
+export const MOCK_ROLE: Record<string, Pick<TRole, 'name'>> = {
   user: {name: 'User'},
   admin: {name: 'Admin'},
 };
 
-const MOCK_USER = {
+export const MOCK_USER = {
   user: {uuid: 'demo-user-uuid', role: MOCK_ROLE.user, password: faker.internet.password()},
   empty_user: {uuid: 'empty-demo-user-uuid', role: MOCK_ROLE.user, password: faker.internet.password()},
   admin_user: {uuid: 'demo-admin-uuid', role: MOCK_ROLE.admin, password: faker.internet.password()},

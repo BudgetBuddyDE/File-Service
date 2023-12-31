@@ -88,6 +88,13 @@ export class FileService {
     return filePath.includes(user.uuid);
   }
 
+  /**
+   * Retrieves the list of files from a directory.
+   *
+   * @param dirPath - The path of the directory.
+   * @param recursive - Indicates whether to search recursively in subdirectories. Default is false.
+   * @returns An array of TFile objects representing the files in the directory.
+   */
   public static getFilesFromDirectory(dirPath: string, recursive = false): TFile[] {
     let fileList: TFile[] = [];
     if (!fs.existsSync(dirPath)) {
@@ -110,6 +117,11 @@ export class FileService {
     return fileList;
   }
 
+  /**
+   * Retrieves information about a file.
+   * @param filePath - The path of the file.
+   * @returns The file information or null if the file does not exist.
+   */
   public static getFileInformation(filePath: string): TFile | null {
     if (!fs.existsSync(filePath)) {
       return null;
@@ -126,11 +138,29 @@ export class FileService {
     };
   }
 
+  /**
+   * Returns the path for a user's file based on the provided user and optional query path.
+   * If a query path is provided, the function checks if the user has an 'Admin' role and returns the path joined with the upload directory.
+   * If no query path is provided, the function returns the path joined with the user's file directory.
+   * @param user - The user object.
+   * @param queryPath - The optional query path.
+   * @returns The path for the user's file.
+   */
   public getPathByUser(user: TUser, queryPath?: string): string {
     return queryPath
       ? user.role.name === 'Admin'
         ? path.join(this.uploadDirectory, queryPath)
         : path.join(this.getUserFileDirectory(user), queryPath)
       : this.getUserFileDirectory(user);
+  }
+
+  /**
+   * Checks if the given file path is a symbolic link.
+   *
+   * @param filePath - The path of the file to check.
+   * @returns True if the file is a symbolic link, false otherwise.
+   */
+  public static isSymbolicLink(filePath: string): boolean {
+    return fs.lstatSync(filePath).isSymbolicLink();
   }
 }
