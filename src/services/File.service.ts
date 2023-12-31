@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import type {TUser} from '@budgetbuddyde/types';
+import {ELogCategory, log} from '../middleware';
 
 export type TFile = {
   name: string;
-  created_at: fs.Stats['birthtime'];
-  last_edited_at: fs.Stats['mtime'];
+  created_at: fs.Stats['birthtime'] | string;
+  last_edited_at: fs.Stats['mtime'] | string;
   size: fs.Stats['size'];
   location: string;
   type: string;
@@ -15,7 +16,10 @@ export class FileService {
   private uploadDir: string;
 
   constructor(uploadDir: string) {
-    this.uploadDir = uploadDir;
+    if (fs.existsSync(uploadDir) === false) {
+      throw new Error("Upload directory doesn't exist");
+    }
+    this.uploadDir = path.join(uploadDir);
   }
 
   get uploadDirectory(): string {
@@ -29,6 +33,16 @@ export class FileService {
    */
   public wasFileAlreadyUploaded(filePath: string): boolean {
     return fs.existsSync(path.join(this.uploadDir, filePath));
+  }
+
+  /**
+   * Checks if a file exists at the specified file path.
+   *
+   * @param filePath - The path of the file to check.
+   * @returns True if the file exists, false otherwise.
+   */
+  public doesFileExist(filePath: string): boolean {
+    return fs.existsSync(filePath);
   }
 
   /**
@@ -62,10 +76,11 @@ export class FileService {
    *
    * @param user - The user object.
    * @param filePath - The path of the file.
+   * @param adminOverwrite - If true, the admins will still have access to the file.
    * @returns A boolean indicating whether the user has access to the file.
    */
-  public doesUserHasAccessToFile(user: TUser, filePath: string): boolean {
-    if (user.role.name === 'Admin') {
+  public doesUserHasAccessToFile(user: TUser, filePath: string, adminOverwrite = false): boolean {
+    if (user.role.name === 'Admin' && adminOverwrite) {
       return true;
     }
 
@@ -73,25 +88,27 @@ export class FileService {
     return filePath.includes(user.uuid);
   }
 
-  // public getFilesFromDirectory(dirPath: string): TFile[] {
-  //   let results: TFile[] = [];
-  //   const list = fs.readdirSync(dirPath);
+  public static getFilesFromDirectory(dirPath: string, recursive = false): TFile[] {
+    let fileList: TFile[] = [];
+    if (!fs.existsSync(dirPath)) {
+      return fileList;
+    }
 
-  //   list.forEach(file => {
-  //     file = path.join(dirPath, file);
-  //     const stat = fs.statSync(file);
+    const files = fs.readdirSync(dirPath);
+    files.forEach(file => {
+      const fileInformation = fs.statSync(path.join(dirPath, file));
 
-  //     if (stat && stat.isDirectory()) {
-  //       /* Recurse into a subdirectory */
-  //       results = results.concat(this.getFilesFromDirectory(file));
-  //     } else {
-  //       /* Is a file */
-  //       results.push(file);
-  //     }
-  //   });
+      if (fileInformation.isFile() && !fileInformation.isDirectory()) {
+        const tfile = FileService.getFileInformation(path.join(dirPath, file));
+        if (tfile == null) log('ERROR', ELogCategory.FILES, 'Could not get file information for file: ' + file);
+        fileList.push(tfile as TFile);
+      } else if (recursive && fileInformation.isDirectory()) {
+        fileList = fileList.concat(this.getFilesFromDirectory(path.join(dirPath, file), recursive));
+      }
+    });
 
-  //   return results;
-  // }
+    return fileList;
+  }
 
   public static getFileInformation(filePath: string): TFile | null {
     if (!fs.existsSync(filePath)) {
@@ -107,5 +124,13 @@ export class FileService {
       location: filePath,
       type: path.extname(filePath),
     };
+  }
+
+  public getPathByUser(user: TUser, queryPath?: string): string {
+    return queryPath
+      ? user.role.name === 'Admin'
+        ? path.join(this.uploadDirectory, queryPath)
+        : path.join(this.getUserFileDirectory(user), queryPath)
+      : this.getUserFileDirectory(user);
   }
 }

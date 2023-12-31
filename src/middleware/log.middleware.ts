@@ -6,6 +6,7 @@ export type TLogType = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 export enum ELogCategory {
   SETUP = 'setup',
   AUTHENTIFICATION = 'authentification',
+  FILES = 'files',
   DOWNLOAD = 'download',
 }
 
@@ -22,7 +23,9 @@ export function logMiddleware(req: Request, res: Response, next: NextFunction) {
       location: req.originalUrl,
       body: req.body,
       query: req.query,
-      header: {authorization: req.headers.authorization},
+      file: req.file || null,
+      files: req.files,
+      headers: req.headers,
     };
 
     log(type, category, message);

@@ -23,6 +23,7 @@ if (MISSING_ENVIRONMENT_VARIABLES.length >= 1) {
 }
 
 import {name, version} from '../package.json';
+import {z} from 'zod';
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
@@ -33,8 +34,9 @@ import archiver from 'archiver';
 import {format} from 'date-fns';
 import {query} from 'express-validator';
 import {ApiResponse, HTTPStatusCode} from '@budgetbuddyde/types';
-import {FileService, TFile} from './services';
+import {FileService, type TFile} from './services';
 import {checkAuthorizationHeader} from './middleware/checkAuthorization.middleware';
+import {request} from 'http';
 
 export const app = express();
 
@@ -45,19 +47,32 @@ app.use(bodyParser.json());
 
 // const uploadDir = process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads');
 const fileService = new FileService(
-  // FIXME: Write test to validate that the uploadDir is created and the correct path is used
   process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads'),
 );
 fs.mkdir(fileService.uploadDirectory, {recursive: true}, (err, path) => {
   if (err) log('ERROR', ELogCategory.SETUP, err);
 });
 
+// TODO: EXPOSE FILES USING A SYMBOLIC LINK USING A PUBLIC DIRECTORY
+
 const upload = multer({
   fileFilter: (req, file, cb) => {
+    // FIXME: Doesn't work
     cb(null, !fileService.wasFileAlreadyUploaded(file.originalname));
   },
   storage: multer.diskStorage({
-    destination: fileService.uploadDirectory,
+    destination: (req, file, cb) => {
+      if (!req.user) {
+        cb(new Error('No authentificated user found'), '');
+        return;
+      }
+
+      const userUploadDir = fileService.getUserFileDirectory(req.user);
+      if (!fileService.doesUserFileDirectoryExist(req.user)) {
+        fs.mkdirSync(userUploadDir, {recursive: true});
+      }
+      cb(null, path.join(fileService.getUserFileDirectory(req.user)));
+    },
     filename: (req, file, cb) => {
       cb(null, file.originalname);
     },
@@ -72,27 +87,35 @@ app.get('/status', (req, res) => {
 
 app.get('/list', query('path').isString().optional(true), (req, res) => {
   try {
-    const queryPath = req.query && req.query.path ? req.query.path : fileService.uploadDirectory;
-    if (!fs.existsSync(queryPath)) {
+    if (!req.user) {
       res
-        .status(HTTPStatusCode.NotFound)
-        .json(ApiResponse.builder().withStatus(HTTPStatusCode.NotFound).withMessage('Path not found').build())
+        .status(HTTPStatusCode.Unauthorized)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.Unauthorized)
+            .withMessage('No authentificated user found')
+            .build(),
+        )
         .end();
       return;
     }
 
-    const files = fs.readdirSync(queryPath).map(fileName => {
-      const filePath = path.join(queryPath, fileName);
-      const fileStats = fs.statSync(filePath);
-      return {
-        name: fileName,
-        created_at: fileStats.birthtime,
-        last_edited_at: fileStats.mtime,
-        size: fileStats.size,
-        location: filePath,
-        type: path.extname(fileName).toLowerCase(),
-      };
-    });
+    const queryPath = fileService.getPathByUser(req.user, req.query!.path as string | undefined);
+
+    if (!fs.existsSync(queryPath)) {
+      res
+        .status(HTTPStatusCode.NotFound)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.NotFound)
+            .withMessage(`Path '${queryPath}' not found`)
+            .build(),
+        )
+        .end();
+      return;
+    }
+
+    const files: TFile[] = FileService.getFilesFromDirectory(queryPath, true);
 
     res
       .json(
@@ -115,7 +138,21 @@ app.get('/list', query('path').isString().optional(true), (req, res) => {
 });
 
 app.get('/search', query('q').isString(), query('type').isString().optional(true), (req, res) => {
-  const files = fs.readdirSync(fileService.uploadDirectory);
+  if (!req.user) {
+    res
+      .status(HTTPStatusCode.Unauthorized)
+      .json(
+        ApiResponse.builder()
+          .withStatus(HTTPStatusCode.Unauthorized)
+          .withMessage('No authentificated user found')
+          .build(),
+      )
+      .end();
+    return;
+  }
+
+  const queryPath = fileService.getPathByUser(req.user);
+  const files: TFile[] = FileService.getFilesFromDirectory(queryPath, true);
   if (files.length === 0) {
     res
       .status(HTTPStatusCode.NotFound)
@@ -127,9 +164,11 @@ app.get('/search', query('q').isString(), query('type').isString().optional(true
   }
 
   const searchQuery = req.query!.q;
-  const searchFileType = req.query && req.query.type ? req.query.type.toLowerCase() : undefined;
-  const partialMatches = files.filter(fileName => fileName.toLocaleLowerCase().includes(searchQuery.toLowerCase()));
-  if (partialMatches.length === 0) {
+  let searchFileType = req.query && req.query.type ? req.query.type.toLowerCase() : undefined;
+  if (searchFileType && !searchFileType.startsWith('.')) searchFileType = '.' + searchFileType;
+
+  let matchingFiles = files.filter(({name}) => name.toLocaleLowerCase().includes(searchQuery.toLowerCase()));
+  if (matchingFiles.length === 0) {
     res
       .status(HTTPStatusCode.NotFound)
       .json(
@@ -142,28 +181,18 @@ app.get('/search', query('q').isString(), query('type').isString().optional(true
     return;
   }
 
-  const matchingFiles = fs
-    .readdirSync(fileService.uploadDirectory)
-    .map(fileName => {
-      const filePath = path.join(fileService.uploadDirectory, fileName);
-      const fileStats = fs.statSync(filePath);
-      const fileType = path.extname(fileName).toLowerCase();
-      if (searchFileType && fileType.substring(1) !== searchFileType) return null;
-      return {
-        name: fileName,
-        created_at: fileStats.birthtime,
-        last_edited_at: fileStats.mtime,
-        size: fileStats.size,
-        location: filePath,
-        type: fileType,
-      };
-    })
-    .filter(file => file != null);
-
+  if (searchFileType) {
+    matchingFiles = matchingFiles.filter(({type}) => type === searchFileType);
+  }
   if (matchingFiles.length === 0) {
     res
-      .status(404)
-      .json(ApiResponse.builder().withStatus(404).withMessage(`No matches for '${searchQuery}'`).build())
+      .status(HTTPStatusCode.NotFound)
+      .json(
+        ApiResponse.builder()
+          .withStatus(HTTPStatusCode.NotFound)
+          .withMessage(`No matches for '${searchQuery}' and type '${searchFileType}'`)
+          .build(),
+      )
       .end();
     return;
   }
@@ -171,7 +200,7 @@ app.get('/search', query('q').isString(), query('type').isString().optional(true
   res
     .json(
       ApiResponse.builder()
-        .withMessage(matchingFiles.length + ' matches')
+        .withMessage(matchingFiles.length + ' files found')
         .withData(matchingFiles)
         .build(),
     )
@@ -179,14 +208,26 @@ app.get('/search', query('q').isString(), query('type').isString().optional(true
 });
 
 app.post('/upload', upload.array('files', 5), (req, res) => {
-  const uploadedFiles = req.files as Express.Multer.File[];
-  // FIXME: Add ability to foce upload files that already exist with a newer name or (forced) overwrite
-  if (!uploadedFiles || uploadedFiles.length === 0) {
+  if (!req.user) {
     res
-      .status(400)
+      .status(HTTPStatusCode.Unauthorized)
       .json(
         ApiResponse.builder()
-          .withStatus(400)
+          .withStatus(HTTPStatusCode.Unauthorized)
+          .withMessage('No authentificated user found')
+          .build(),
+      )
+      .end();
+    return;
+  }
+
+  const uploadedFiles = req.files as Express.Multer.File[];
+  if (!uploadedFiles || uploadedFiles.length === 0) {
+    res
+      .status(HTTPStatusCode.BadGateway)
+      .json(
+        ApiResponse.builder()
+          .withStatus(HTTPStatusCode.BadGateway)
           .withMessage("No files were uploaded! All of these files we're already uploaded!")
           .build(),
       )
@@ -198,133 +239,203 @@ app.post('/upload', upload.array('files', 5), (req, res) => {
     .json(
       ApiResponse.builder()
         .withMessage(`${uploadedFiles.length} files were uploaded`)
-        .withData(
-          uploadedFiles.map(file => {
-            const modifiedFile = file;
-            // @ts-ignore
-            delete modifiedFile.destination;
-            return modifiedFile;
-          }) as (Express.Multer.File & {destination?: string})[],
-        )
+        .withData(uploadedFiles.map(({path}) => FileService.getFileInformation(path)) as TFile[])
         .build(),
     )
     .end();
 });
 
-app.get('/download', query('file').isString(), (req, res) => {
-  const requestFiles = req.query!.file as string | string[];
-
-  if (typeof requestFiles === 'string' && !Array.isArray(requestFiles)) {
-    const exists = fileService.wasFileAlreadyUploaded(requestFiles);
-    if (!exists) {
+app.get(
+  '/download',
+  query('file').isString(),
+  query('useUserDir').isBoolean().optional().default(false),
+  (req, res) => {
+    if (!req.user) {
       res
-        .status(404)
+        .status(HTTPStatusCode.Unauthorized)
         .json(
           ApiResponse.builder()
-            .withStatus(404)
-            .withMessage(requestFiles + " wasn't found")
+            .withStatus(HTTPStatusCode.Unauthorized)
+            .withMessage('No authentificated user found')
             .build(),
         )
         .end();
       return;
     }
 
-    res.download(path.join(fileService.uploadDirectory, requestFiles), err => {
-      if (err) {
-        log('ERROR', ELogCategory.DOWNLOAD, err);
-        res.status(500).json({err});
+    const useUserDir = req.query!.useUserDir && Boolean(req.query!.useUserDir);
+    const requestFiles = req.query!.file as string | string[];
+    if (typeof requestFiles === 'string' && !Array.isArray(requestFiles)) {
+      const downloadPath = useUserDir
+        ? path.join(fileService.getUserFileDirectory(req.user), requestFiles)
+        : requestFiles;
+      const exists = fileService.doesFileExist(downloadPath);
+      if (!exists) {
+        res
+          .status(404)
+          .json(
+            ApiResponse.builder()
+              .withStatus(404)
+              .withMessage(requestFiles + " wasn't found")
+              .build(),
+          )
+          .end();
+        return;
       }
+
+      if (!fileService.doesUserHasAccessToFile(req.user, downloadPath, false)) {
+        res
+          .status(HTTPStatusCode.Forbidden)
+          .json(
+            ApiResponse.builder()
+              .withStatus(HTTPStatusCode.Forbidden)
+              .withMessage('You are not allowed to access this file')
+              .build(),
+          )
+          .end();
+        return;
+      }
+      res.download(downloadPath, err => {
+        if (err) {
+          log('ERROR', ELogCategory.DOWNLOAD, err);
+          res.status(HTTPStatusCode.InternalServerError).json({err});
+        }
+      });
+      return;
+    }
+
+    log('ERROR', ELogCategory.DOWNLOAD, 'should not be shown');
+
+    const archive = archiver('zip');
+    const foundFiles = requestFiles.filter(fileName => fileService.doesFileExist(fileName));
+    if (foundFiles.length === 0) {
+      res
+        .status(HTTPStatusCode.NotFound)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.NotFound)
+            .withMessage("The requested files couldn't be found")
+            .build(),
+        )
+        .end();
+      return;
+    }
+
+    foundFiles.forEach(fileName => archive.file(path.join(fileService.uploadDirectory, fileName), {name: fileName}));
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=${format(new Date(), 'dd_MM_yy_HHmmss')}.zip`);
+
+    archive.pipe(res);
+    archive.on('finish', () => log('INFO', ELogCategory.DOWNLOAD, 'ZIP-archive created and sent'));
+    archive.on('error', err => {
+      res
+        .status(HTTPStatusCode.InternalServerError)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.InternalServerError)
+            .withMessage("Couldn't pack ZIP-archive because of: " + err.message)
+            .build(),
+        )
+        .end();
     });
-    return;
-  }
+    archive.finalize();
+  },
+);
 
-  const archive = archiver('zip');
-  const foundFiles = requestFiles.filter(fileName => fileService.wasFileAlreadyUploaded(fileName));
-  if (foundFiles.length === 0) {
+app.delete(
+  '/delete',
+  query('file').isString(),
+  query('useUserDir').isBoolean().optional().default(false),
+  async (req, res) => {
+    if (!req.user) {
+      res
+        .status(HTTPStatusCode.Unauthorized)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.Unauthorized)
+            .withMessage('No authentificated user found')
+            .build(),
+        )
+        .end();
+      return;
+    }
+
+    const useUserDir = req.query!.useUserDir && Boolean(req.query!.useUserDir);
+    const requestFiles = req.query!.file as string | string[];
+    if (typeof requestFiles === 'string' && !Array.isArray(requestFiles)) {
+      const deletePath = useUserDir
+        ? path.join(fileService.getUserFileDirectory(req.user), requestFiles)
+        : requestFiles;
+
+      const exists = fileService.doesFileExist(deletePath);
+      if (!exists) {
+        res
+          .status(404)
+          .json(
+            ApiResponse.builder()
+              .withStatus(404)
+              .withMessage(requestFiles + " wasn't found")
+              .build(),
+          )
+          .end();
+        return;
+      }
+
+      const doesUserHasAccessToFile = fileService.doesUserHasAccessToFile(req.user, deletePath, false);
+      if (!doesUserHasAccessToFile) {
+        res
+          .status(HTTPStatusCode.Forbidden)
+          .json(
+            ApiResponse.builder()
+              .withStatus(HTTPStatusCode.Forbidden)
+              .withMessage('You are not allowed to access this file')
+              .build(),
+          )
+          .end();
+        return;
+      }
+
+      const fileInfo = FileService.getFileInformation(deletePath);
+      fs.unlinkSync(deletePath);
+      res
+        .status(HTTPStatusCode.Ok)
+        .json(ApiResponse.builder().withMessage('The file was permanently deleted').withData(fileInfo).build())
+        .end();
+      return;
+    }
+
+    const foundFiles: TFile[] = requestFiles
+      .map(fileName => (useUserDir ? path.join(fileService.getUserFileDirectory(req.user!), fileName) : fileName))
+      .filter(filePath => fileService.doesFileExist(filePath))
+      .map(filePath => FileService.getFileInformation(filePath) as TFile);
+    if (foundFiles.length === 0) {
+      res
+        .status(HTTPStatusCode.NotFound)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.NotFound)
+            .withMessage('The requested files could not be found')
+            .build(),
+        )
+        .end();
+      return;
+    }
+    const missingFiles = requestFiles.filter(fileName => !foundFiles.includes(fileName)) as string[];
+    foundFiles.forEach(({location}) => {
+      fs.unlinkSync(location);
+    });
+
     res
-      .status(404)
-      .json(ApiResponse.builder().withStatus(404).withMessage("The requested files couldn't be found").build())
-      .end();
-    return;
-  }
-
-  foundFiles.forEach(fileName => archive.file(path.join(fileService.uploadDirectory, fileName), {name: fileName}));
-
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename=${format(new Date(), 'dd_MM_yy_HHmmss')}.zip`);
-
-  archive.pipe(res);
-  archive.on('finish', () => log('INFO', ELogCategory.DOWNLOAD, 'ZIP-archive created and sent'));
-  archive.on('error', err => {
-    res
-      .status(500)
       .json(
         ApiResponse.builder()
-          .withStatus(500)
-          .withMessage("Couldn't pack ZIP-archive because of: " + err.message)
+          .withMessage(`${foundFiles.length} files were permanently deleted`)
+          .withData({success: foundFiles, failed: missingFiles})
           .build(),
       )
       .end();
-  });
-  archive.finalize();
-});
-
-app.delete('/delete', query('file').isString(), async (req, res) => {
-  const requestFiles = req.query!.file as string | string[];
-
-  if (typeof requestFiles === 'string' && !Array.isArray(requestFiles)) {
-    if (!fileService.wasFileAlreadyUploaded(requestFiles)) {
-      res
-        .status(404)
-        .json(
-          ApiResponse.builder()
-            .withStatus(404)
-            .withMessage(requestFiles + " wasn't found")
-            .build(),
-        )
-        .end();
-      return;
-    }
-    const fileLocation = path.join(fileService.uploadDirectory, requestFiles);
-    const fileInfo = fs.statSync(fileLocation);
-    fs.unlinkSync(fileLocation);
-    res.json({
-      status: 200,
-      message: 'Die Datei wurde gelöscht',
-      data: {
-        name: requestFiles,
-        createdAt: fileInfo.birthtime,
-        lastEditedAt: fileInfo.mtime,
-        size: fileInfo.size,
-      },
-    });
-    return;
-  }
-
-  const foundFiles = requestFiles.filter(fileName => fileService.wasFileAlreadyUploaded(fileName)) as string[];
-  if (foundFiles.length === 0) {
-    res
-      .status(404)
-      .json(ApiResponse.builder().withStatus(404).withMessage('The requested files could not be found').build())
-      .end();
-    return;
-  }
-  const missingFiles = requestFiles.filter(fileName => !foundFiles.includes(fileName)) as string[];
-
-  foundFiles.forEach(fileName => {
-    const fileLocation = path.join(fileService.uploadDirectory, fileName);
-    fs.unlinkSync(fileLocation);
-  });
-
-  res
-    .json(
-      ApiResponse.builder()
-        .withMessage(`${foundFiles.length} files were permanently deleted`)
-        .withData({success: foundFiles, failed: missingFiles})
-        .build(),
-    )
-    .end();
-});
+  },
+);
 
 export const listen = app.listen(config.port, process.env.HOSTNAME || 'localhost', () => {
   console.table({
