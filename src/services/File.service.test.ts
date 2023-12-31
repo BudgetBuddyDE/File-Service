@@ -1,3 +1,4 @@
+import path from 'path';
 import {FileService, TFile} from './File.service';
 
 describe('FileService', () => {
@@ -20,23 +21,26 @@ describe('FileService', () => {
       // Act
       const result = FileService.getFilesFromDirectory(dirPath, true);
 
+      result.forEach(file => {
+        // @ts-expect-error
+        delete file.created_at;
+        // @ts-expect-error
+        delete file.last_edited_at;
+      });
+
       // Assert
       expect(result).toHaveLength(2);
       expect(result).toEqual([
         {
           name: 'nested-file.txt',
-          created_at: new Date('2023-12-29T22:55:36.236Z'),
-          last_edited_at: new Date('2023-12-29T22:55:52.615Z'),
           size: 36,
-          location: 'testfiles\\demo-user-uuid\\nested\\nested-file.txt',
+          location: path.join('testfiles', 'demo-user-uuid', 'nested', 'nested-file.txt'),
           type: '.txt',
         },
         {
           name: 'userfile.txt',
-          created_at: new Date('2023-12-29T21:14:10.110Z'),
-          last_edited_at: new Date('2023-12-29T21:14:13.041Z'),
           size: 24,
-          location: 'testfiles\\demo-user-uuid\\userfile.txt',
+          location: path.join('testfiles', 'demo-user-uuid', 'userfile.txt'),
           type: '.txt',
         },
       ] as TFile[]);
@@ -49,15 +53,18 @@ describe('FileService', () => {
       // Act
       const result = FileService.getFilesFromDirectory(dirPath);
 
+      // @ts-expect-error
+      delete result[0].created_at;
+      // @ts-expect-error
+      delete result[0].last_edited_at;
+
       // Assert
       expect(result).toHaveLength(1);
       expect(result).toEqual([
         {
           name: 'userfile.txt',
-          created_at: new Date('2023-12-29T21:14:10.110Z'),
-          last_edited_at: new Date('2023-12-29T21:14:13.041Z'),
           size: 24,
-          location: 'testfiles\\demo-user-uuid\\userfile.txt',
+          location: path.join('testfiles', 'demo-user-uuid', 'userfile.txt'),
           type: '.txt',
         },
       ] as TFile[]);

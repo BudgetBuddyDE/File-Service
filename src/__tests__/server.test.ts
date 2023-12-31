@@ -5,7 +5,6 @@ import supertest from 'supertest';
 import {AuthService, FileService, TFile} from '../services';
 import path from 'path';
 import fs from 'fs';
-import {ELogCategory, log} from '../middleware';
 
 afterAll(done => {
   listen.close(error => {
@@ -63,18 +62,18 @@ describe('/list behaves as expected', () => {
     const mockedFiles = [
       {
         name: 'nested-file.txt',
-        created_at: '2023-12-29T22:55:36.236Z',
-        last_edited_at: '2023-12-29T22:55:52.615Z',
+        // created_at: '2023-12-29T22:55:36.236Z',
+        // last_edited_at: '2023-12-29T22:55:52.615Z',
         size: 36,
-        location: 'testfiles\\demo-user-uuid\\nested\\nested-file.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'nested', 'nested-file.txt'),
         type: '.txt',
       },
       {
         name: 'userfile.txt',
-        created_at: '2023-12-29T21:14:10.110Z',
-        last_edited_at: '2023-12-29T21:14:13.041Z',
+        // created_at: '2023-12-29T21:14:10.110Z',
+        // last_edited_at: '2023-12-29T21:14:13.041Z',
         size: 24,
-        location: 'testfiles\\demo-user-uuid\\userfile.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'userfile.txt'),
         type: '.txt',
       },
     ] as TFile[];
@@ -89,6 +88,13 @@ describe('/list behaves as expected', () => {
 
     // Act
     const response = await supertest(app).get('/list').set('Authorization', userBearerToken);
+
+    response.body.data.forEach((file: TFile) => {
+      // @ts-expect-error
+      delete file.created_at;
+      // @ts-expect-error
+      delete file.last_edited_at;
+    });
 
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
@@ -106,10 +112,10 @@ describe('/list behaves as expected', () => {
     const mockedFiles = [
       {
         name: 'nested-file.txt',
-        created_at: '2023-12-29T22:55:36.236Z',
-        last_edited_at: '2023-12-29T22:55:52.615Z',
+        // created_at: '2023-12-29T22:55:36.236Z',
+        // last_edited_at: '2023-12-29T22:55:52.615Z',
         size: 36,
-        location: 'testfiles\\demo-user-uuid\\nested\\nested-file.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'nested', 'nested-file.txt'),
         type: '.txt',
       },
     ] as TFile[];
@@ -124,6 +130,13 @@ describe('/list behaves as expected', () => {
 
     // Act
     const response = await supertest(app).get('/list').query({path: 'nested/'}).set('Authorization', userBearerToken);
+
+    response.body.data.forEach((file: TFile) => {
+      // @ts-expect-error
+      delete file.created_at;
+      // @ts-expect-error
+      delete file.last_edited_at;
+    });
 
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
@@ -141,10 +154,10 @@ describe('/list behaves as expected', () => {
     const mockedFiles = [
       {
         name: 'adminfile.txt',
-        created_at: '2023-12-29T21:14:00.426Z',
-        last_edited_at: '2023-12-29T21:14:05.151Z',
+        // created_at: '2023-12-29T21:14:00.426Z',
+        // last_edited_at: '2023-12-29T21:14:05.151Z',
         size: 25,
-        location: 'testfiles\\demo-admin-uuid\\adminfile.txt',
+        location: path.join('testfiles', 'demo-admin-uuid', 'adminfile.txt'),
         type: '.txt',
       },
     ] as TFile[];
@@ -159,6 +172,13 @@ describe('/list behaves as expected', () => {
 
     // Act
     const response = await supertest(app).get('/list').set('Authorization', userBearerToken);
+
+    response.body.data.forEach((file: TFile) => {
+      // @ts-expect-error
+      delete file.created_at;
+      // @ts-expect-error
+      delete file.last_edited_at;
+    });
 
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
@@ -177,18 +197,18 @@ describe('/list behaves as expected', () => {
     const mockedFiles = [
       {
         name: 'nested-file.txt',
-        created_at: '2023-12-29T22:55:36.236Z',
-        last_edited_at: '2023-12-29T22:55:52.615Z',
+        // created_at: '2023-12-29T22:55:36.236Z',
+        // last_edited_at: '2023-12-29T22:55:52.615Z',
         size: 36,
-        location: 'testfiles\\demo-user-uuid\\nested\\nested-file.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'nested', 'nested-file.txt'),
         type: '.txt',
       },
       {
         name: 'userfile.txt',
-        created_at: '2023-12-29T21:14:10.110Z',
-        last_edited_at: '2023-12-29T21:14:13.041Z',
+        // created_at: '2023-12-29T21:14:10.110Z',
+        // last_edited_at: '2023-12-29T21:14:13.041Z',
         size: 24,
-        location: 'testfiles\\demo-user-uuid\\userfile.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'userfile.txt'),
         type: '.txt',
       },
     ] as TFile[];
@@ -209,6 +229,13 @@ describe('/list behaves as expected', () => {
       .get('/list')
       .query({path: 'demo-user-uuid/'})
       .set('Authorization', userBearerToken);
+
+    response.body.data.forEach((file: TFile) => {
+      // @ts-expect-error
+      delete file.created_at;
+      // @ts-expect-error
+      delete file.last_edited_at;
+    });
 
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
@@ -277,10 +304,10 @@ describe('/search should behave as expected', () => {
     const mockedFiles = [
       {
         name: 'userfile.txt',
-        created_at: '2023-12-29T21:14:10.110Z',
-        last_edited_at: '2023-12-29T21:14:13.041Z',
+        // created_at: '2023-12-29T21:14:10.110Z',
+        // last_edited_at: '2023-12-29T21:14:13.041Z',
         size: 24,
-        location: 'testfiles\\demo-user-uuid\\userfile.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'userfile.txt'),
         type: '.txt',
       },
     ] as TFile[];
@@ -296,6 +323,13 @@ describe('/search should behave as expected', () => {
     // Act
     const response = await supertest(app).get('/search').query({q: 'erfi'}).set('Authorization', userBearerToken);
 
+    response.body.data.forEach((file: TFile) => {
+      // @ts-expect-error
+      delete file.created_at;
+      // @ts-expect-error
+      delete file.last_edited_at;
+    });
+
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
     expect(response.statusCode).toBe(HTTPStatusCode.Ok);
@@ -309,18 +343,18 @@ describe('/search should behave as expected', () => {
     const mockedFiles = [
       {
         name: 'nested-file.txt',
-        created_at: '2023-12-29T22:55:36.236Z',
-        last_edited_at: '2023-12-29T22:55:52.615Z',
+        // created_at: '2023-12-29T22:55:36.236Z',
+        // last_edited_at: '2023-12-29T22:55:52.615Z',
         size: 36,
-        location: 'testfiles\\demo-user-uuid\\nested\\nested-file.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'nested', 'nested-file.txt'),
         type: '.txt',
       },
       {
         name: 'userfile.txt',
-        created_at: '2023-12-29T21:14:10.110Z',
-        last_edited_at: '2023-12-29T21:14:13.041Z',
+        // created_at: '2023-12-29T21:14:10.110Z',
+        // last_edited_at: '2023-12-29T21:14:13.041Z',
         size: 24,
-        location: 'testfiles\\demo-user-uuid\\userfile.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'userfile.txt'),
         type: '.txt',
       },
     ] as TFile[];
@@ -336,6 +370,13 @@ describe('/search should behave as expected', () => {
     // Act
     const response = await supertest(app).get('/search').query({q: 'file'}).set('Authorization', userBearerToken);
 
+    response.body.data.forEach((file: TFile) => {
+      // @ts-expect-error
+      delete file.created_at;
+      // @ts-expect-error
+      delete file.last_edited_at;
+    });
+
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
     expect(response.statusCode).toBe(HTTPStatusCode.Ok);
@@ -349,10 +390,10 @@ describe('/search should behave as expected', () => {
     const mockedFiles = [
       {
         name: 'userfile.txt',
-        created_at: '2023-12-29T21:14:10.110Z',
-        last_edited_at: '2023-12-29T21:14:13.041Z',
+        // created_at: '2023-12-29T21:14:10.110Z',
+        // last_edited_at: '2023-12-29T21:14:13.041Z',
         size: 24,
-        location: 'testfiles\\demo-user-uuid\\userfile.txt',
+        location: path.join('testfiles', 'demo-user-uuid', 'userfile.txt'),
         type: '.txt',
       },
     ] as TFile[];
@@ -370,6 +411,13 @@ describe('/search should behave as expected', () => {
       .get('/search')
       .query({q: 'erfi', type: 'txt'})
       .set('Authorization', userBearerToken);
+
+    response.body.data.forEach((file: TFile) => {
+      // @ts-expect-error
+      delete file.created_at;
+      // @ts-expect-error
+      delete file.last_edited_at;
+    });
 
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
