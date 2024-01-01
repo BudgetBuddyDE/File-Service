@@ -7,12 +7,12 @@
     "node": ">=16.0.0"
   },
   "scripts": {
-    "start": "npm run build && node build/server.js",
+    "start": "npm run build && node build/src/server.js",
     "dev": "nodemon src/server.ts",
     "test": "jest --passWithNoTests --detectOpenHandles",
     "lint": "eslint --fix --ext .ts ./src",
     "format": "prettier --write \"src/**/*.ts\"",
-    "build": "rimraf build && npm run test && tsc --pretty"
+    "build": "rimraf build && tsc --pretty"
   },
   "keywords": [],
   "author": "Thorben",
