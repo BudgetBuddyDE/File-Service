@@ -1,8 +1,8 @@
-# ExpressJS-Template
+# File-Service
 
 ## ToC
 
-- [ExpressJS-Template](#expressjs-template)
+- [File-Service](#file-service)
   - [ToC](#toc)
   - [Installation](#installation)
     - [Development / Manual](#development--manual)
