@@ -11,6 +11,22 @@ describe('checkAuthorizationHeader middleware', () => {
   const requestPath = '/static/' + uuid + '/userfile.txt';
   const requestServerFilePath = '/static/test.txt';
 
+  it("should not require auth when requesting the server's status", async () => {
+    // Act
+    const response = await supertest(app).get('/status');
+
+    // Assert
+    expect(response.statusCode).toBe(HTTPStatusCode.Ok);
+  });
+
+  it("should not require auth when requesting the server's root", async () => {
+    // Act
+    const response = await supertest(app).get('/');
+
+    // Assert
+    expect(response.statusCode).toBe(HTTPStatusCode.Found);
+  });
+
   it('should return a Unauthorized response if the authorization header is missing', async () => {
     // Act
     const response = await supertest(app).get(requestPath);

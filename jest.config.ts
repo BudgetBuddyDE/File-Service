@@ -17,7 +17,7 @@ const JestConfig: Config = {
   testEnvironment: 'node',
   testRegex: '\\.(test|spec)\\.(ts)?$',
   moduleFileExtensions: ['ts', 'js'],
-  silent: false,
+  silent: true,
   // globals: {
   //   'process.env': {
   //     // PORT: 9080,

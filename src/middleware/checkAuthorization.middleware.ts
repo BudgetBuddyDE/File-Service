@@ -17,6 +17,11 @@ export const ZUuid = z.string().uuid();
  */
 export async function checkAuthorizationHeader(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
+  const requestPath = req.path;
+
+  if (requestPath === '/status' || requestPath === '/') {
+    return next();
+  }
 
   if (!authHeader) {
     return res
