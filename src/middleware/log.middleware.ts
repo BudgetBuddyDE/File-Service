@@ -23,8 +23,6 @@ export function logMiddleware(req: Request, res: Response, next: NextFunction) {
       location: req.originalUrl,
       body: req.body,
       query: req.query,
-      file: req.file || null,
-      files: req.files,
       headers: req.headers,
     };
 
