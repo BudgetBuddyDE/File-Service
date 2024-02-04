@@ -1,8 +1,8 @@
-import {ApiResponse, HTTPStatusCode, type TRole, type TUser} from '@budgetbuddyde/types';
+import {ApiResponse, HTTPStatusCode, type TRole, type TUser, type TFile} from '@budgetbuddyde/types';
 import {app, listen} from '../server';
 import {faker} from '@faker-js/faker';
 import supertest from 'supertest';
-import {AuthService, FileService, TFile} from '../services';
+import {AuthService, FileService} from '../services';
 import path from 'path';
 import fs from 'fs';
 

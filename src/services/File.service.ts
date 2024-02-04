@@ -1,16 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import type {TUser} from '@budgetbuddyde/types';
+import type {TUser, TFile} from '@budgetbuddyde/types';
 import {ELogCategory, log} from '../middleware';
-
-export type TFile = {
-  name: string;
-  created_at: fs.Stats['birthtime'] | string;
-  last_edited_at: fs.Stats['mtime'] | string;
-  size: fs.Stats['size'];
-  location: string;
-  type: string;
-};
 
 export class FileService {
   private uploadDir: string;

@@ -32,8 +32,8 @@ import fs from 'fs';
 import archiver from 'archiver';
 import {format} from 'date-fns';
 import {query} from 'express-validator';
-import {ApiResponse, HTTPStatusCode} from '@budgetbuddyde/types';
-import {FileService, type TFile} from './services';
+import {ApiResponse, HTTPStatusCode, type TFile} from '@budgetbuddyde/types';
+import {FileService} from './services';
 import {checkAuthorizationHeader} from './middleware/checkAuthorization.middleware';
 
 // const uploadDir = process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads');

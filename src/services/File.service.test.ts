@@ -1,5 +1,6 @@
 import path from 'path';
-import {FileService, TFile} from './File.service';
+import {type TFile} from '@budgetbuddyde/types';
+import {FileService} from './File.service';
 
 describe('FileService', () => {
   describe('getFilesFromDirectory', () => {
