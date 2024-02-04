@@ -1,6 +1,6 @@
 import type {NextFunction, Request, Response} from 'express';
 import {AuthService} from '../services';
-import {ApiResponse, HTTPStatusCode} from '@budgetbuddyde/types';
+import {ApiResponse, HTTPStatusCode, type TUser} from '@budgetbuddyde/types';
 import {ELogCategory, log} from './log.middleware';
 import {z} from 'zod';
 
@@ -18,24 +18,62 @@ export const ZUuid = z.string().uuid();
 export async function checkAuthorizationHeader(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const requestPath = req.path;
+  const query = new URLSearchParams(req.query as Record<string, string>),
+    queryBearer = query.get('bearer');
 
   if (requestPath === '/status' || requestPath === '/') {
     return next();
   }
 
-  if (!authHeader) {
+  if (!authHeader && !queryBearer) {
     return res
-      .status(401)
-      .json(ApiResponse.builder().withStatus(401).withMessage('No Bearer token provided').build())
+      .status(HTTPStatusCode.Unauthorized)
+      .json(
+        ApiResponse.builder().withStatus(HTTPStatusCode.Unauthorized).withMessage('No Bearer token provided').build(),
+      )
       .end();
   }
 
-  const [user, err] = await AuthService.validateAuthHeader(authHeader);
-  if (err || !user) {
-    log('ERROR', ELogCategory.AUTHENTIFICATION, err instanceof Error ? err.message : err!);
+  let authUser: TUser | null = null;
+  if (authHeader) {
+    const [user, err] = await AuthService.validateAuthHeader(authHeader as string);
+    if (err || !user) {
+      log('WARN', ELogCategory.AUTHENTIFICATION, err instanceof Error ? err.message : err!);
+      return res
+        .status(HTTPStatusCode.Unauthorized)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.Unauthorized)
+            .withMessage('Invalid Bearer token provided by header')
+            .build(),
+        )
+        .end();
+    }
+    authUser = user;
+  }
+
+  if (!authHeader && queryBearer) {
+    const [user, err] = await AuthService.validateAuthHeader(`Bearer ${queryBearer}`);
+    if (err || !user) {
+      log('WARN', ELogCategory.AUTHENTIFICATION, err instanceof Error ? err.message : err!);
+      return res
+        .status(HTTPStatusCode.Unauthorized)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.Unauthorized)
+            .withMessage('Invalid Bearer token provided by query')
+            .build(),
+        )
+        .end();
+    }
+    authUser = user;
+  }
+
+  if (!authUser) {
+    log('WARN', ELogCategory.AUTHENTIFICATION, 'No user found');
     return res
-      .status(401)
-      .json(ApiResponse.builder().withStatus(401).withMessage('Invalid Bearer token provided').build())
+      .status(HTTPStatusCode.BadRequest)
+      .json(ApiResponse.builder().withStatus(HTTPStatusCode.BadRequest).withMessage('No user found').build())
       .end();
   }
 
@@ -50,13 +88,13 @@ export async function checkAuthorizationHeader(req: Request, res: Response, next
       reqPath: req.path,
       possibleUuid,
       parsedUuid,
-      userUuid: user.uuid,
+      userUuid: authUser.uuid,
     });
   }
 
   // will be true becuase it has the uuid in the path
   const isRequesingUserFile = req.path.substring(0, 7) === '/static' && parsedUuid.success;
-  const isRequestingUserFileAndIsNotOwner = isRequesingUserFile && parsedUuid.data !== user.uuid;
+  const isRequestingUserFileAndIsNotOwner = isRequesingUserFile && parsedUuid.data !== authUser.uuid;
   const isRequestingServerFile = req.path.substring(0, 7) === '/static' && !parsedUuid.success;
   if (isRequestingUserFileAndIsNotOwner || isRequestingServerFile) {
     return res
@@ -70,7 +108,7 @@ export async function checkAuthorizationHeader(req: Request, res: Response, next
       .end();
   }
 
-  req.user = user;
+  req.user = authUser;
 
   next();
 }

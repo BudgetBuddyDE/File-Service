@@ -27,7 +27,7 @@ describe('checkAuthorizationHeader middleware', () => {
     expect(response.statusCode).toBe(HTTPStatusCode.Found);
   });
 
-  it('should return a Unauthorized response if the authorization header is missing', async () => {
+  it('should return a Unauthorized response if the authorization header is missing and no query-bearer is provided', async () => {
     // Act
     const response = await supertest(app).get(requestPath);
 
@@ -101,6 +101,44 @@ describe('checkAuthorizationHeader middleware', () => {
     // Assert
     expect(validateAuthHeaderSpy).toHaveBeenCalledWith(userBearerToken);
     expect(response.status).toBe(HTTPStatusCode.Forbidden);
+    validateAuthHeaderSpy.mockRestore();
+  });
+
+  it('should return a 200 response if the bearer query-param has valid values', async () => {
+    // Arrange
+    const user = MOCK_USER.user;
+    const validateAuthHeaderSpy = jest.spyOn(AuthService, 'validateAuthHeader');
+    validateAuthHeaderSpy.mockResolvedValue([MOCK_USER.user as TUser, null]);
+    jest.spyOn(ZUuid, 'safeParse').mockReturnValueOnce({success: true, data: MOCK_USER.user.uuid} as any);
+    const queryBearer = `${user.uuid}.${user.password}`;
+
+    // Act
+    const response = await supertest(app).get(requestPath).query({
+      bearer: queryBearer,
+    });
+
+    // Assert
+    expect(validateAuthHeaderSpy).toHaveBeenCalledWith(`Bearer ${queryBearer}`);
+    expect(response.status).toBe(HTTPStatusCode.Ok);
+    validateAuthHeaderSpy.mockRestore();
+  });
+
+  it('should deny access to the file when the bearer query-param is invalid', async () => {
+    // Arrange
+    const user = MOCK_USER.user;
+    const validateAuthHeaderSpy = jest.spyOn(AuthService, 'validateAuthHeader');
+    validateAuthHeaderSpy.mockResolvedValue([null, new Error('Invalid Bearer token provided')]);
+    jest.spyOn(ZUuid, 'safeParse').mockReturnValueOnce({success: true, data: MOCK_USER.user.uuid} as any);
+    const queryBearer = `${user.uuid}.${user.password}`;
+
+    // Act
+    const response = await supertest(app).get(requestPath).query({
+      bearer: queryBearer,
+    });
+
+    // Assert
+    expect(validateAuthHeaderSpy).toHaveBeenCalledWith(`Bearer ${queryBearer}`);
+    expect(response.status).toBe(HTTPStatusCode.Unauthorized);
     validateAuthHeaderSpy.mockRestore();
   });
 });
