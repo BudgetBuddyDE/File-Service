@@ -32,8 +32,8 @@ import fs from 'fs';
 import archiver from 'archiver';
 import {format} from 'date-fns';
 import {query} from 'express-validator';
-import {ApiResponse, HTTPStatusCode, type TFile} from '@budgetbuddyde/types';
-import {FileService} from './services';
+import {ApiResponse, HTTPStatusCode, type TCreateTransactionFilePayload, type TFile} from '@budgetbuddyde/types';
+import {BackendService, FileService} from './services';
 import {checkAuthorizationHeader} from './middleware/checkAuthorization.middleware';
 
 // const uploadDir = process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads');
@@ -54,7 +54,6 @@ app.use(checkAuthorizationHeader);
 app.use('/static', express.static(fileService.uploadDirectory));
 
 // TODO: EXPOSE FILES USING A SYMBOLIC LINK USING A PUBLIC DIRECTORY
-
 const upload = multer({
   fileFilter: (req, file, cb) => {
     // FIXME: Doesn't work
@@ -243,6 +242,48 @@ app.post('/upload', upload.array('files', 5), (req, res) => {
         .build(),
     )
     .end();
+});
+
+app.post('/transaction/upload', upload.array('files', 5), async (req, res) => {
+  const transactionId = req.query.transactionId;
+  if (!transactionId) {
+    return res.status(HTTPStatusCode.BadRequest).json({message: 'No transactionId provided'}).end();
+  }
+
+  const formData = new FormData();
+  if (req.files) {
+    for (const file of req.files as Express.Multer.File[]) {
+      const blob = new Blob([file.buffer], {type: file.mimetype});
+      formData.append('files', blob, file.originalname);
+    }
+  }
+
+  const response = await fetch(`http://localhost:${config.port}/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: req.headers.authorization || '',
+    },
+    body: formData,
+  });
+  const json = (await response.json()) as ApiResponse<TFile[]>;
+  if (json.status !== HTTPStatusCode.Ok || !json.data) return res.status(json.status).json(json).end();
+  const uploadedFiles: TCreateTransactionFilePayload[] = json.data.map(file => ({
+    transactionId: Number(transactionId),
+    fileName: file.name,
+    fileSize: file.size,
+    mimeType: file.type,
+    fileUrl: FileService.getFileUrl(req.user!, file),
+  }));
+
+  const [transactionFiles, error] = await BackendService.attachFilesToTransaction(uploadedFiles, req.user!);
+  if (error) {
+    return res
+      .status(HTTPStatusCode.InternalServerError)
+      .json(ApiResponse.builder().withStatus(HTTPStatusCode.InternalServerError).withMessage(error.message).build())
+      .end();
+  }
+
+  return res.json(ApiResponse.builder().withData(transactionFiles).build());
 });
 
 app.get(
@@ -445,6 +486,7 @@ export const listen = app.listen(config.port, process.env.HOSTNAME || 'localhost
     'Node Version': process.version,
     'Server Port': config.port,
     'Upload Directory': fileService.uploadDirectory,
+    Host: FileService.getHostUrl(),
   });
   log('LOG', ELogCategory.SETUP, `Server is listening on port ${config.port}`);
 });

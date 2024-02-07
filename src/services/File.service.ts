@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type {TUser, TFile} from '@budgetbuddyde/types';
 import {ELogCategory, log} from '../middleware';
+import {config} from '../config';
 
 export class FileService {
   private uploadDir: string;
@@ -15,6 +16,14 @@ export class FileService {
 
   get uploadDirectory(): string {
     return this.uploadDir;
+  }
+
+  static getHostUrl(): string {
+    return process.env.HOST_URL || 'http://localhost:' + config.port;
+  }
+
+  static getFileUrl(user: TUser, file: TFile): string {
+    return `${this.getHostUrl()}/static/${user.uuid}/${file.name}`;
   }
 
   /**

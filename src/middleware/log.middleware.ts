@@ -8,6 +8,7 @@ export enum ELogCategory {
   AUTHENTIFICATION = 'authentification',
   FILES = 'files',
   DOWNLOAD = 'download',
+  UPLOAD = 'file_upload',
 }
 
 export function logMiddleware(req: Request, res: Response, next: NextFunction) {

@@ -34,6 +34,7 @@ export const config: TConfig = {
   environmentVariables: [
     'ENV',
     'UPLOAD_DIR',
+    'HOST_URL',
     // 'PORT',
   ],
   port: process.env.PORT != undefined ? Number(process.env.PORT) : isRunningInProduction() ? 8080 : 8070,
