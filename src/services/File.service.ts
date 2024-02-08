@@ -19,7 +19,7 @@ export class FileService {
   }
 
   static getHostUrl(): string {
-    return process.env.HOST_URL || 'http://localhost:' + config.port;
+    return process.env.HOST_URL as string;
   }
 
   static getFileUrl(user: TUser, file: TFile): string {

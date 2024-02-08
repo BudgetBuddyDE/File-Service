@@ -23,7 +23,7 @@ if (MISSING_ENVIRONMENT_VARIABLES.length >= 1) {
 }
 
 import {name, version} from '../package.json';
-import express from 'express';
+import express, {Request} from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import multer from 'multer';
@@ -206,6 +206,44 @@ app.get('/search', query('q').isString(), query('type').isString().optional(true
     .end();
 });
 
+const handleFileUpload = async (req: any, res: any) => {
+  if (!req.user) {
+    res
+      .status(HTTPStatusCode.Unauthorized)
+      .json(
+        ApiResponse.builder()
+          .withStatus(HTTPStatusCode.Unauthorized)
+          .withMessage('No authentificated user found')
+          .build(),
+      )
+      .end();
+    return;
+  }
+
+  const uploadedFiles = req.files as Express.Multer.File[];
+  if (!uploadedFiles || uploadedFiles.length === 0) {
+    res
+      .status(HTTPStatusCode.BadGateway)
+      .json(
+        ApiResponse.builder()
+          .withStatus(HTTPStatusCode.BadGateway)
+          .withMessage("No files were uploaded! All of these files we're already uploaded!")
+          .build(),
+      )
+      .end();
+    return;
+  }
+
+  res
+    .json(
+      ApiResponse.builder()
+        .withMessage(`${uploadedFiles.length} files were uploaded`)
+        .withData(uploadedFiles.map(({path}) => FileService.getFileInformation(path)) as TFile[])
+        .build(),
+    )
+    .end();
+};
+
 app.post('/upload', upload.array('files', 5), (req, res) => {
   if (!req.user) {
     res
@@ -250,33 +288,47 @@ app.post('/transaction/upload', upload.array('files', 5), async (req, res) => {
     return res.status(HTTPStatusCode.BadRequest).json({message: 'No transactionId provided'}).end();
   }
 
-  const formData = new FormData();
-  if (req.files) {
-    for (const file of req.files as Express.Multer.File[]) {
-      const blob = new Blob([file.buffer], {type: file.mimetype});
-      formData.append('files', blob, file.originalname);
-    }
+  if (!req.user) {
+    res
+      .status(HTTPStatusCode.Unauthorized)
+      .json(
+        ApiResponse.builder()
+          .withStatus(HTTPStatusCode.Unauthorized)
+          .withMessage('No authentificated user found')
+          .build(),
+      )
+      .end();
+    return;
   }
 
-  const response = await fetch(`http://localhost:${config.port}/upload`, {
-    method: 'POST',
-    headers: {
-      Authorization: req.headers.authorization || '',
-    },
-    body: formData,
-  });
-  const json = (await response.json()) as ApiResponse<TFile[]>;
-  if (json.status !== HTTPStatusCode.Ok || !json.data) return res.status(json.status).json(json).end();
-  const uploadedFiles: TCreateTransactionFilePayload[] = json.data.map(file => ({
-    transactionId: Number(transactionId),
-    fileName: file.name,
-    fileSize: file.size,
-    mimeType: file.type,
-    fileUrl: FileService.getFileUrl(req.user!, file),
-  }));
-
-  const [transactionFiles, error] = await BackendService.attachFilesToTransaction(uploadedFiles, req.user!);
+  let uploadedFiles = req.files as Express.Multer.File[];
+  if (!uploadedFiles || uploadedFiles.length === 0) {
+    res
+      .status(HTTPStatusCode.BadGateway)
+      .json(
+        ApiResponse.builder()
+          .withStatus(HTTPStatusCode.BadGateway)
+          .withMessage("No files were uploaded! All of these files we're already uploaded!")
+          .build(),
+      )
+      .end();
+    return;
+  }
+  const [transactionFiles, error] = await BackendService.attachFilesToTransaction(
+    uploadedFiles.map(file => {
+      const fileInformation = FileService.getFileInformation(file.path) as TFile;
+      return {
+        transactionId: Number(transactionId),
+        fileName: fileInformation.name,
+        fileSize: fileInformation.size,
+        mimeType: fileInformation.type,
+        fileUrl: FileService.getFileUrl(req.user!, fileInformation),
+      };
+    }),
+    req.user!,
+  );
   if (error) {
+    console.log('fuck', error);
     return res
       .status(HTTPStatusCode.InternalServerError)
       .json(ApiResponse.builder().withStatus(HTTPStatusCode.InternalServerError).withMessage(error.message).build())
