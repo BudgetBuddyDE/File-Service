@@ -39,7 +39,7 @@ export const config: TConfig = {
   ],
   port: process.env.PORT != undefined ? Number(process.env.PORT) : isRunningInProduction() ? 8080 : 8070,
   cors: {
-    origin: isRunningInProduction() ? 'https://*budget-buddy.de' : '*',
+    origin: isRunningInProduction() ? [/\.budget-buddy\.de$/] : [/\.localhost\$/],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   },
