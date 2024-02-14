@@ -23,7 +23,7 @@ if (MISSING_ENVIRONMENT_VARIABLES.length >= 1) {
 }
 
 import {name, version} from '../package.json';
-import express, {Request} from 'express';
+import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import multer from 'multer';
@@ -32,7 +32,7 @@ import fs from 'fs';
 import archiver from 'archiver';
 import {format} from 'date-fns';
 import {query} from 'express-validator';
-import {ApiResponse, HTTPStatusCode, type TCreateTransactionFilePayload, type TFile} from '@budgetbuddyde/types';
+import {ApiResponse, HTTPStatusCode, type TFile} from '@budgetbuddyde/types';
 import {BackendService, FileService} from './services';
 import {checkAuthorizationHeader} from './middleware/checkAuthorization.middleware';
 
@@ -53,7 +53,6 @@ app.use(checkAuthorizationHeader);
 
 app.use('/static', express.static(fileService.uploadDirectory));
 
-// TODO: EXPOSE FILES USING A SYMBOLIC LINK USING A PUBLIC DIRECTORY
 const upload = multer({
   fileFilter: (req, file, cb) => {
     // FIXME: Doesn't work
@@ -205,44 +204,6 @@ app.get('/search', query('q').isString(), query('type').isString().optional(true
     )
     .end();
 });
-
-const handleFileUpload = async (req: any, res: any) => {
-  if (!req.user) {
-    res
-      .status(HTTPStatusCode.Unauthorized)
-      .json(
-        ApiResponse.builder()
-          .withStatus(HTTPStatusCode.Unauthorized)
-          .withMessage('No authentificated user found')
-          .build(),
-      )
-      .end();
-    return;
-  }
-
-  const uploadedFiles = req.files as Express.Multer.File[];
-  if (!uploadedFiles || uploadedFiles.length === 0) {
-    res
-      .status(HTTPStatusCode.BadGateway)
-      .json(
-        ApiResponse.builder()
-          .withStatus(HTTPStatusCode.BadGateway)
-          .withMessage("No files were uploaded! All of these files we're already uploaded!")
-          .build(),
-      )
-      .end();
-    return;
-  }
-
-  res
-    .json(
-      ApiResponse.builder()
-        .withMessage(`${uploadedFiles.length} files were uploaded`)
-        .withData(uploadedFiles.map(({path}) => FileService.getFileInformation(path)) as TFile[])
-        .build(),
-    )
-    .end();
-};
 
 app.post('/upload', upload.array('files', 5), (req, res) => {
   if (!req.user) {

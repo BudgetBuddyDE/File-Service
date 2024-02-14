@@ -82,15 +82,6 @@ export async function checkAuthorizationHeader(req: Request, res: Response, next
   // Files that aren't stored under /static/<user.uuid> are not accessible by anyone except admins
   const possibleUuid = req.path.substring(8, 8 + 36);
   const parsedUuid = ZUuid.safeParse(possibleUuid);
-  // Check if the user is trying to access a file that doesn't belong to him
-  if (req.path.substring(0, 7) === '/static') {
-    console.table({
-      reqPath: req.path,
-      possibleUuid,
-      parsedUuid,
-      userUuid: authUser.uuid,
-    });
-  }
 
   // will be true becuase it has the uuid in the path
   const isRequesingUserFile = req.path.substring(0, 7) === '/static' && parsedUuid.success;
