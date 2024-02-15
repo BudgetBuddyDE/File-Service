@@ -18,12 +18,13 @@ export class FileService {
     return this.uploadDir;
   }
 
-  static getHostUrl(): string {
+  getHostUrl(): string {
     return process.env.HOST_URL as string;
   }
 
-  static getFileUrl(user: TUser, file: TFile): string {
-    return `${this.getHostUrl()}/static/${user.uuid}/${file.name}`;
+  getFileUrl(file: TFile): string {
+    const filePathWoBaseDir = FileService.pathToString(file.location.replace(this.uploadDir, ''));
+    return encodeURI(`${this.getHostUrl()}/static/${filePathWoBaseDir}`);
   }
 
   /**
@@ -32,7 +33,17 @@ export class FileService {
    * @returns True if the file was already uploaded, false otherwise
    */
   public wasFileAlreadyUploaded(filePath: string): boolean {
-    return fs.existsSync(path.join(this.uploadDir, filePath));
+    const wasFileAlreadyUploaded = fs.existsSync(filePath);
+    log(
+      'INFO',
+      ELogCategory.DEBUG,
+      'Checking if file was already uploaded: ' + filePath + ' - ' + wasFileAlreadyUploaded,
+    );
+    return wasFileAlreadyUploaded;
+  }
+
+  static pathToString(path: string): string {
+    return path.replace(/\\/g, '/');
   }
 
   /**

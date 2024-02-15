@@ -4,6 +4,7 @@ import chalk from 'chalk';
 export type TLogType = 'LOG' | 'INFO' | 'WARN' | 'ERROR';
 
 export enum ELogCategory {
+  DEBUG = 'debug',
   SETUP = 'setup',
   AUTHENTIFICATION = 'authentification',
   FILES = 'files',

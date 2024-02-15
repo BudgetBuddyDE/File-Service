@@ -32,11 +32,10 @@ import fs from 'fs';
 import archiver from 'archiver';
 import {format} from 'date-fns';
 import {query} from 'express-validator';
-import {ApiResponse, HTTPStatusCode, type TFile} from '@budgetbuddyde/types';
+import {ApiResponse, HTTPStatusCode, TTransactionFile, type TFile} from '@budgetbuddyde/types';
 import {BackendService, FileService} from './services';
 import {checkAuthorizationHeader} from './middleware/checkAuthorization.middleware';
 
-// const uploadDir = process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads');
 const fileService = new FileService(
   process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads'),
 );
@@ -53,10 +52,32 @@ app.use(checkAuthorizationHeader);
 
 app.use('/static', express.static(fileService.uploadDirectory));
 
+const isTransactionRelated = (req: express.Request): boolean => {
+  return req.path.startsWith('/transaction');
+};
+
+const getTransactionId = (req: express.Request): number | undefined => {
+  if (isTransactionRelated(req)) {
+    return Number(req.query.transactionId);
+  }
+  return undefined;
+};
+
 const upload = multer({
   fileFilter: (req, file, cb) => {
-    // FIXME: Doesn't work
-    cb(null, !fileService.wasFileAlreadyUploaded(file.originalname));
+    if (!req.user) {
+      cb(null, false);
+      return;
+    }
+
+    let filePath;
+    const transactionId = getTransactionId(req);
+    if (isTransactionRelated(req) && transactionId) {
+      filePath = path.join(fileService.getUserFileDirectory(req.user), transactionId.toString(), file.originalname);
+    } else filePath = path.join(fileService.getUserFileDirectory(req.user), file.originalname);
+
+    // in order to use the value correctly, we need to say "the file was not already uploaded" and provide "true" in order to continue
+    cb(null, !fileService.wasFileAlreadyUploaded(filePath));
   },
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
@@ -65,11 +86,23 @@ const upload = multer({
         return;
       }
 
-      const userUploadDir = fileService.getUserFileDirectory(req.user);
+      // when the user hasn't uploaded any files yet, we need to create his personal file directory
+      let fileDestinationPath = fileService.getUserFileDirectory(req.user);
       if (!fileService.doesUserFileDirectoryExist(req.user)) {
-        fs.mkdirSync(userUploadDir, {recursive: true});
+        fs.mkdirSync(fileDestinationPath, {recursive: true});
       }
-      cb(null, path.join(fileService.getUserFileDirectory(req.user)));
+
+      const transactionId = getTransactionId(req);
+      if (isTransactionRelated(req) && transactionId) {
+        fileDestinationPath = path.join(fileDestinationPath, transactionId.toString());
+        if (!fs.existsSync(fileDestinationPath)) {
+          fs.mkdirSync(fileDestinationPath, {recursive: true});
+          log('LOG', ELogCategory.UPLOAD, `Transaction directory created at: ${fileDestinationPath}`);
+        }
+      }
+
+      log('INFO', ELogCategory.DEBUG, `File will be saved at: ${fileDestinationPath}`);
+      cb(null, fileDestinationPath);
     },
     filename: (req, file, cb) => {
       cb(null, file.originalname);
@@ -243,7 +276,7 @@ app.post('/upload', upload.array('files', 5), (req, res) => {
     .end();
 });
 
-app.post('/transaction/upload', upload.array('files', 5), async (req, res) => {
+app.post('/transaction/upload', query('transactionId').isNumeric(), upload.array('files', 5), async (req, res) => {
   const transactionId = req.query.transactionId;
   if (!transactionId) {
     return res.status(HTTPStatusCode.BadRequest).json({message: 'No transactionId provided'}).end();
@@ -283,13 +316,12 @@ app.post('/transaction/upload', upload.array('files', 5), async (req, res) => {
         fileName: fileInformation.name,
         fileSize: fileInformation.size,
         mimeType: fileInformation.type,
-        fileUrl: FileService.getFileUrl(req.user!, fileInformation),
+        fileUrl: fileService.getFileUrl(fileInformation),
       };
     }),
     req.user!,
   );
   if (error) {
-    console.log('fuck', error);
     return res
       .status(HTTPStatusCode.InternalServerError)
       .json(ApiResponse.builder().withStatus(HTTPStatusCode.InternalServerError).withMessage(error.message).build())
@@ -298,6 +330,78 @@ app.post('/transaction/upload', upload.array('files', 5), async (req, res) => {
 
   return res.json(ApiResponse.builder().withData(transactionFiles).build());
 });
+
+app.delete(
+  '/transaction/delete',
+  query('transactionId').isNumeric(),
+  query('files').isArray().isUUID(4),
+  async (req, res) => {
+    if (!req.user) {
+      res
+        .status(HTTPStatusCode.Unauthorized)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.Unauthorized)
+            .withMessage('No authentificated user found')
+            .build(),
+        )
+        .end();
+      return;
+    }
+
+    const transactionId = Number(req.query!.transactionId);
+    let files = req.query!.files;
+    if (!Array.isArray(files)) files = [files];
+
+    try {
+      const [transaction, transactionError] = await BackendService.getTransactionById(transactionId, req.user);
+      if (transactionError) throw transactionError;
+      if (!transaction) throw new Error("The transaction couldn't be found");
+
+      const transactionFiles = transaction.attachedFiles;
+      const filesToDelete = transactionFiles.filter(file => files.includes(file.uuid));
+
+      const transactionFilesDirectory = path.join(fileService.getUserFileDirectory(req.user), transactionId.toString());
+
+      if (filesToDelete.length === transactionFiles.length) {
+        fs.rmSync(transactionFilesDirectory, {recursive: true});
+      } else {
+        filesToDelete.forEach(file => {
+          fs.rmSync(path.join(transactionFilesDirectory, file.fileName));
+        });
+      }
+
+      const [detachResult, detachError] = await BackendService.detachFileFromTransaction(
+        files.map((id: TTransactionFile['uuid']) => ({uuid: id})),
+        req.user,
+      );
+      if (detachError) throw detachError;
+      if (!detachResult) throw new Error('Something went wrong while detaching the files from the transaction');
+
+      res
+        .json(
+          ApiResponse.builder()
+            .withMessage("The files we're successfully deleted!")
+            .withData({
+              path: FileService.pathToString(transactionFilesDirectory),
+              files: filesToDelete,
+            })
+            .build(),
+        )
+        .end();
+    } catch (error) {
+      return res
+        .status(HTTPStatusCode.InternalServerError)
+        .json(
+          ApiResponse.builder()
+            .withStatus(HTTPStatusCode.InternalServerError)
+            .withMessage((error as Error).message)
+            .build(),
+        )
+        .end();
+    }
+  },
+);
 
 app.get(
   '/download',
@@ -499,7 +603,7 @@ export const listen = app.listen(config.port, process.env.HOSTNAME || 'localhost
     'Node Version': process.version,
     'Server Port': config.port,
     'Upload Directory': fileService.uploadDirectory,
-    Host: FileService.getHostUrl(),
+    Host: fileService.getHostUrl(),
   });
   log('LOG', ELogCategory.SETUP, `Server is listening on port ${config.port}`);
 });
