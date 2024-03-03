@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import {config} from './config';
-import {ELogCategory, log, logMiddleware} from './middleware';
+import {ELogCategory, logMiddleware} from './middleware';
 
 /**
  * Check if all required environment-variables are set
@@ -11,7 +11,7 @@ const MISSING_ENVIRONMENT_VARIABLES = config.environmentVariables.filter(variabl
   }
 });
 if (MISSING_ENVIRONMENT_VARIABLES.length >= 1) {
-  log(
+  console.log(
     'ERROR',
     ELogCategory.SETUP,
     JSON.stringify({
@@ -32,15 +32,22 @@ import fs from 'fs';
 import archiver from 'archiver';
 import {format} from 'date-fns';
 import {query} from 'express-validator';
-import {ApiResponse, HTTPStatusCode, TTransactionFile, type TFile} from '@budgetbuddyde/types';
+import {ApiResponse, HTTPStatusCode, type TTransactionFile, type TFile} from '@budgetbuddyde/types';
 import {BackendService, FileService} from './services';
-import {checkAuthorizationHeader} from './middleware/checkAuthorization.middleware';
+import {logger, checkAuthorizationHeader} from './middleware';
 
 const fileService = new FileService(
   process.env.UPLOAD_DIR ? process.env.UPLOAD_DIR : path.join(__dirname, '../', 'uploads'),
 );
 fs.mkdir(fileService.uploadDirectory, {recursive: true}, (err, path) => {
-  if (err) log('ERROR', ELogCategory.SETUP, err);
+  if (err) {
+    logger.error(err.message, {
+      category: ELogCategory.SETUP,
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+    });
+  }
 });
 
 export const app = express();
@@ -97,11 +104,17 @@ const upload = multer({
         fileDestinationPath = path.join(fileDestinationPath, transactionId.toString());
         if (!fs.existsSync(fileDestinationPath)) {
           fs.mkdirSync(fileDestinationPath, {recursive: true});
-          log('LOG', ELogCategory.UPLOAD, `Transaction directory created at: ${fileDestinationPath}`);
+          logger.log("Transaction directory created at '{fileDestinationPath}'", {
+            category: ELogCategory.UPLOAD,
+            fileDestinationPath: fileDestinationPath,
+          });
         }
       }
 
-      log('INFO', ELogCategory.DEBUG, `File will be saved at: ${fileDestinationPath}`);
+      logger.debug("The file will be saved at '{fileDestinationPath}'", {
+        category: ELogCategory.DEBUG,
+        fileDestinationPath: fileDestinationPath,
+      });
       cb(null, fileDestinationPath);
     },
     filename: (req, file, cb) => {
@@ -430,10 +443,10 @@ app.get(
       const exists = fileService.doesFileExist(downloadPath);
       if (!exists) {
         res
-          .status(404)
+          .status(HTTPStatusCode.NotFound)
           .json(
             ApiResponse.builder()
-              .withStatus(404)
+              .withStatus(HTTPStatusCode.NotFound)
               .withMessage(requestFiles + " wasn't found")
               .build(),
           )
@@ -455,14 +468,19 @@ app.get(
       }
       res.download(downloadPath, err => {
         if (err) {
-          log('ERROR', ELogCategory.DOWNLOAD, err);
+          logger.error(err.message, {
+            category: ELogCategory.DOWNLOAD,
+            name: err.name,
+            message: err.message,
+            stack: err.stack,
+          });
           res.status(HTTPStatusCode.InternalServerError).json({err});
         }
       });
       return;
     }
 
-    log('ERROR', ELogCategory.DOWNLOAD, 'should not be shown');
+    logger.error('Should not be shown', {category: ELogCategory.DOWNLOAD});
 
     const archive = archiver('zip');
     const foundFiles = requestFiles.filter(fileName => fileService.doesFileExist(fileName));
@@ -485,7 +503,7 @@ app.get(
     res.setHeader('Content-Disposition', `attachment; filename=${format(new Date(), 'dd_MM_yy_HHmmss')}.zip`);
 
     archive.pipe(res);
-    archive.on('finish', () => log('INFO', ELogCategory.DOWNLOAD, 'ZIP-archive created and sent'));
+    archive.on('finish', () => logger.info('ZIP-archive created and sent', {category: ELogCategory.DOWNLOAD}));
     archive.on('error', err => {
       res
         .status(HTTPStatusCode.InternalServerError)
@@ -529,10 +547,10 @@ app.delete(
       const exists = fileService.doesFileExist(deletePath);
       if (!exists) {
         res
-          .status(404)
+          .status(HTTPStatusCode.NotFound)
           .json(
             ApiResponse.builder()
-              .withStatus(404)
+              .withStatus(HTTPStatusCode.NotFound)
               .withMessage(requestFiles + " wasn't found")
               .build(),
           )
@@ -605,5 +623,15 @@ export const listen = app.listen(config.port, process.env.HOSTNAME || 'localhost
     'Upload Directory': fileService.uploadDirectory,
     Host: fileService.getHostUrl(),
   });
-  log('LOG', ELogCategory.SETUP, `Server is listening on port ${config.port}`);
+  logger.info("Server is listening on port '{port}'", {
+    category: ELogCategory.SETUP,
+    port: config.port,
+    application: name,
+    version: version,
+    runtime_environment: config.environment,
+    node_version: process.version,
+    server_port: config.port,
+    upload_directory: fileService.uploadDirectory,
+    host: fileService.getHostUrl(),
+  });
 });

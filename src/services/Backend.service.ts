@@ -7,10 +7,10 @@ import {
   ZTransactionFile,
   type TCreateTransactionFilePayload,
   type TServiceResponse,
-  TTransaction,
+  type TTransaction,
   ZTransaction,
 } from '@budgetbuddyde/types';
-import {ELogCategory, log} from '../middleware';
+import {ELogCategory, logger} from '../middleware';
 
 export class BackendService {
   private static host = process.env.BACKEND_HOST as string;
@@ -66,8 +66,14 @@ export class BackendService {
       if (!parsingResult.success) throw new Error(parsingResult.error.message);
       return [parsingResult.data, null];
     } catch (error) {
-      log('ERROR', ELogCategory.UPLOAD, typeof error === 'object' ? JSON.stringify(error) : (error as string));
-      return [null, error as Error];
+      const err = error as Error;
+      logger.error(err.message, {
+        category: ELogCategory.UPLOAD,
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      });
+      return [null, err];
     }
   }
 
@@ -90,8 +96,14 @@ export class BackendService {
       if (!parsingResult.success) throw new Error(parsingResult.error.message);
       return [parsingResult.data, null];
     } catch (error) {
-      log('ERROR', ELogCategory.UPLOAD, typeof error === 'object' ? JSON.stringify(error) : (error as string));
-      return [null, error as Error];
+      const err = error as Error;
+      logger.error(err.message, {
+        category: ELogCategory.UPLOAD,
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      });
+      return [null, err];
     }
   }
 }

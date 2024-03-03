@@ -23,6 +23,10 @@ export type TConfig = {
    */
   port: 8080 | 8070 | number;
   cors: CorsOptions;
+  log: {
+    apiUrl: string;
+    apiKey: string;
+  };
 };
 
 /**
@@ -36,11 +40,17 @@ export const config: TConfig = {
     'UPLOAD_DIR',
     'HOST_URL',
     // 'PORT',
+    'LOG_API_URL',
+    'LOG_API_KEY',
   ],
   port: process.env.PORT != undefined ? Number(process.env.PORT) : isRunningInProduction() ? 8080 : 8070,
   cors: {
     origin: isRunningInProduction() ? [/\.budget-buddy\.de$/] : [/\.localhost\$/],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+  },
+  log: {
+    apiUrl: process.env.LOG_API_URL as string,
+    apiKey: process.env.LOG_API_KEY as string,
   },
 };

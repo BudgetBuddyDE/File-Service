@@ -1,6 +1,6 @@
 import {type TUser, ZUser, type TApiResponse} from '@budgetbuddyde/types';
 import fetch from 'node-fetch';
-import {log} from '../middleware';
+import {ELogCategory, logger} from '../middleware';
 
 export class AuthService {
   private static host: string = process.env.BACKEND_HOST + '/v1/auth';
@@ -36,7 +36,13 @@ export class AuthService {
 
       return [parsedData, null];
     } catch (error) {
-      log('ERROR', 'AUTH', error instanceof Error ? error.message : (error as string));
+      const err = error as Error;
+      logger.error(err.message, {
+        category: ELogCategory.AUTHENTIFICATION,
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      });
       return [null, error as Error];
     }
   }

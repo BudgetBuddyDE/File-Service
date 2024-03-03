@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type {TUser, TFile} from '@budgetbuddyde/types';
-import {ELogCategory, log} from '../middleware';
-import {config} from '../config';
+import {ELogCategory, logger} from '../middleware';
 
 export class FileService {
   private uploadDir: string;
@@ -34,11 +33,11 @@ export class FileService {
    */
   public wasFileAlreadyUploaded(filePath: string): boolean {
     const wasFileAlreadyUploaded = fs.existsSync(filePath);
-    log(
-      'INFO',
-      ELogCategory.DEBUG,
-      'Checking if file was already uploaded: ' + filePath + ' - ' + wasFileAlreadyUploaded,
-    );
+    logger.debug("Checking if file was already uploaded: '{filePath}' - '{wasFileAlreadyUploaded}'", {
+      category: ELogCategory.UPLOAD,
+      filePath: filePath,
+      wasFileAlreadyUploaded: wasFileAlreadyUploaded,
+    });
     return wasFileAlreadyUploaded;
   }
 
@@ -118,7 +117,12 @@ export class FileService {
 
       if (fileInformation.isFile() && !fileInformation.isDirectory()) {
         const tfile = FileService.getFileInformation(path.join(dirPath, file));
-        if (tfile == null) log('ERROR', ELogCategory.FILES, 'Could not get file information for file: ' + file);
+        if (tfile == null) {
+          logger.error('Could not get file information for file: {file}', {
+            category: ELogCategory.FILES,
+            file: file,
+          });
+        }
         fileList.push(tfile as TFile);
       } else if (recursive && fileInformation.isDirectory()) {
         fileList = fileList.concat(this.getFilesFromDirectory(path.join(dirPath, file), recursive));
