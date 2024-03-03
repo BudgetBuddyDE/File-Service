@@ -51,7 +51,7 @@ export function logMiddleware(req: Request, res: Response, next: NextFunction) {
       headers: req.headers,
     };
 
-    logger.log("Process request with status code '{statusCode}'", {
+    logger.info("Process request with status code '{statusCode}'", {
       statusCode,
       category: ELogCategory.REQUEST,
       ...message,

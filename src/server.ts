@@ -104,7 +104,7 @@ const upload = multer({
         fileDestinationPath = path.join(fileDestinationPath, transactionId.toString());
         if (!fs.existsSync(fileDestinationPath)) {
           fs.mkdirSync(fileDestinationPath, {recursive: true});
-          logger.log("Transaction directory created at '{fileDestinationPath}'", {
+          logger.info("Transaction directory created at '{fileDestinationPath}'", {
             category: ELogCategory.UPLOAD,
             fileDestinationPath: fileDestinationPath,
           });
