@@ -1,7 +1,7 @@
 import type {NextFunction, Request, Response} from 'express';
 import {AuthService} from '../services';
 import {ApiResponse, HTTPStatusCode, type TUser} from '@budgetbuddyde/types';
-import {ELogCategory, logger} from './log.middleware';
+import {ELogCategory, log} from './log.middleware';
 import {z} from 'zod';
 
 export const ZUuid = z.string().uuid();
@@ -38,10 +38,7 @@ export async function checkAuthorizationHeader(req: Request, res: Response, next
   if (authHeader) {
     const [user, err] = await AuthService.validateAuthHeader(authHeader as string);
     if (err || !user) {
-      logger.warn(err?.message ?? "Wasn't able to validate the authorization-header '{token}'", {
-        category: ELogCategory.AUTHENTIFICATION,
-        token: authHeader,
-      });
+      log('WARN', ELogCategory.AUTHENTIFICATION, err instanceof Error ? err.message : err!);
       return res
         .status(HTTPStatusCode.Unauthorized)
         .json(
@@ -58,10 +55,7 @@ export async function checkAuthorizationHeader(req: Request, res: Response, next
   if (!authHeader && queryBearer) {
     const [user, err] = await AuthService.validateAuthHeader(`Bearer ${queryBearer}`);
     if (err || !user) {
-      logger.warn(err?.message ?? "Wasn't able to validate the authorization-header '{token}'", {
-        category: ELogCategory.AUTHENTIFICATION,
-        token: queryBearer,
-      });
+      log('WARN', ELogCategory.AUTHENTIFICATION, err instanceof Error ? err.message : err!);
       return res
         .status(HTTPStatusCode.Unauthorized)
         .json(
@@ -76,7 +70,7 @@ export async function checkAuthorizationHeader(req: Request, res: Response, next
   }
 
   if (!authUser) {
-    logger.warn('No user found', {category: ELogCategory.AUTHENTIFICATION});
+    log('WARN', ELogCategory.AUTHENTIFICATION, 'No user found');
     return res
       .status(HTTPStatusCode.BadRequest)
       .json(ApiResponse.builder().withStatus(HTTPStatusCode.BadRequest).withMessage('No user found').build())
